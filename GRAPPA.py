@@ -31,7 +31,7 @@ class GRAPPA:
         total_kernel_num = np.array(range(1,R))
 
         # calculate the pad size in each direction for the image
-        pad_size_y = int(kernel_size[0] / 2)
+        pad_size_y = int(R * kernel_size[0] / 2)
         pad_size_x = int(kernel_size[1] // 2)
 
         # pad kspace and ACS data
@@ -47,11 +47,11 @@ class GRAPPA:
         coils,n_padded_ACS_rows,n_padded_ACS_cols = np.shape(padded_ACS_data)
 
         # ranges for kspace
-        ky_range = slice(pad_size_y, n_rows, R)
+        ky_range = slice(pad_size_y, n_rows - pad_size_y, R)
         kx_range = slice(pad_size_x, n_cols)
         # undersampling ACS data
-        ky_ACS_range = slice(pad_size_y, n_ACS_rows, R)
-        kx_ACS_range = slice(pad_size_x, n_ACS_cols)
+        ky_ACS_range = slice(pad_size_y, n_ACS_rows+1-pad_size_y, R)
+        kx_ACS_range = slice(pad_size_x, n_ACS_cols+1)
         usamp_ACS_data = []
         for coil in range(coils):
             usamp_ACS = np.zeros_like(padded_ACS_data[coil])
@@ -75,6 +75,12 @@ class GRAPPA:
             # calculating the ACS weights
             w = self.weight_calc(coils, num_ACS_trg, S_ACS, ACS_trg_rows, ACS_trg_cols, ACS_data)
 
+            # interpolating ACS region for clarification
+            M_ACS_interpolated = np.matmul(w,S_ACS)
+
+            # calculate the ACS region from GRAPPA reconstruction
+            ACS_data = self.apply_targets(coils, pad_ACS_trg_rows, pad_ACS_trg_cols, M_ACS_interpolated, padded_ACS_data, ACS_data, pad_size_y, pad_size_x, n_ACS_rows, n_ACS_cols)
+
             # finding the actual target indices across all of K-Space
             pad_trg_rows, pad_trg_cols, trg_rows, trg_cols, num_trg = self.trg_indices_calc(R, kernel_size, n_rows, n_cols, kernel_num, pad_size_y, pad_size_x)
 
@@ -85,12 +91,15 @@ class GRAPPA:
             M = np.matmul(w,S)
 
             # repopulating K-Space with calculated targets
-            self.kspace = self.apply_targets(coils, pad_trg_rows, pad_trg_cols, M, padded_kspace, kspace, ky_range, kx_range, pad_size_y, n_rows)
+            kspace = self.apply_targets(coils, pad_trg_rows, pad_trg_cols, M, padded_kspace, kspace, pad_size_y, pad_size_x, n_rows, n_cols)
 
 
         # assemble all of the coil views into an image
+        self.kspace = kspace
+        self.ACS_data = ACS_data
         image = Recon_functions.sum_of_squares(coils, self.kspace)
         self.image = image
+        ACS_image = Recon_functions.sum_of_squares(coils, self.ACS_data)
 
 
     def relative_indices(self, R, kernel_size, n_rows, n_cols, kernel_num):
@@ -191,7 +200,7 @@ class GRAPPA:
 
         return w
 
-    def apply_targets(self, coils, pad_trg_rows, pad_trg_cols, M, pad_kspace, kspace, ky_range, kx_range, pad_size_y, n_rows):
+    def apply_targets(self, coils, pad_trg_rows, pad_trg_cols, M, pad_kspace, kspace, pad_size_y, pad_size_x, n_rows, n_cols):
 
         # iterate across the target values inputting them into padded K-space
         for coil in range(coils):
@@ -201,6 +210,9 @@ class GRAPPA:
                     pad_kspace[coil, row, col] = M[coil, j]
                     j += 1
             # input the new values into the un-padded K-space
-            ky_range = slice(pad_size_y,n_rows)
-            kspace[coil,ky_range,kx_range] = pad_kspace[coil,ky_range,kx_range]
+            ky_pad_range = slice(pad_size_y,n_rows+pad_size_y)
+            ky_range = slice(0,n_rows)
+            kx_pad_range = slice(pad_size_x,n_cols+pad_size_x)
+            kx_range = slice(0,n_cols)
+            kspace[coil,ky_range,kx_range] = pad_kspace[coil,ky_pad_range,kx_pad_range]
         return kspace
