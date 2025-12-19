@@ -14,8 +14,8 @@ Script containing functions which are used in the Parallel_Imaging.py file for u
 
 ## GRAPPA.py 
 Class which contains the GRAPPA reconstruction algorithm. 
-- relative_indices() used to calcualte the indices of the GRAPPA source and targets of the kernel
-- trg_indices_calc() calculates the targets in the image input
-- src_val_calc() calcualtes the source values from the image input
-- weight_calc() calculates the weights of the GRAPPA kernel
-- apply_targets() reinserting the calculated target values into the undersampled image 
+- function 1: relative_indices() used to calcualte the indices of the GRAPPA source and targets of the kernel
+- function 2: trg_indices_calc() calculates the targets in the image input
+- function 3: src_val_calc() calcualtes the source values from the image input
+- function 4: weight_calc() calculates the weights of the GRAPPA kernel
+- function 5: apply_targets() reinserting the calculated target values into the undersampled image 
