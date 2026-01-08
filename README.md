@@ -1,7 +1,7 @@
 # GRAPPA-Implementation
 Python implementation of the MRI Reconstruction Algorithm GRAPPA
 
-Implementation has been templated by Mark Chiew's MATLAB GRAPPA tutorial 
+Implementation has been inspired by Mark Chiew's MATLAB GRAPPA tutorial https://github.com/mchiew/grappa-tutorial
 
 ## Parallel_Imaging.py
 Script which takes an image, in the script the Shepp-logan Phantom is used and a neonatal brain is commented, and multiplies image by a gaussian sensativity maps to mirror Parrallel Imaging acquisition. These parallel images are then undersampled by an acceleration factor, R, and ACS data is also sampled from each coil. The GRAPPA reconstruction algorithm is called in this script to reconstruct undersampled data.
