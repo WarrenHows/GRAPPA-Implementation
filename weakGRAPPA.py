@@ -1,4 +1,4 @@
-## GRAPPA class for GRAPPA reconstruction implementation
+## weakGRAPPA class for GRAPPA reconstruction implementation using Damaged ACS weight calibration
 
 # import all nessersary modules/libraries
 import imageio.v2 as iio
@@ -122,7 +122,7 @@ class GRAPPA:
         kernel_trg_rows, kernel_trg_cols = np.where(mask_1trg == True)
         kernel_trg = np.stack((kernel_trg_rows, kernel_trg_cols))
 
-        # calculating relative indicies of source points in reference to the target point in small kernel above (this is applicable to all points for reconstruction)
+        # calculating relative indices of source points in reference to the target point in small kernel above (this is applicable to all points for reconstruction)
         kernel_rel_rows = kernel_src_rows - kernel_trg_rows
         kernel_rel_cols = kernel_src_cols - kernel_trg_cols
         kernel_rel_idx = np.stack((kernel_rel_rows, kernel_rel_cols))

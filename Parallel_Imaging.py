@@ -7,8 +7,9 @@ from skimage.data import shepp_logan_phantom  # import test image
 import numpy as np
 from scipy import fftpack
 from scipy import signal
-import GRAPPA
+import weakGRAPPA
 import Recon_functions
+import strongGRAPPA
 
 # import test image, convert to numpy array and find dimensions
 #img = iio.imread("childMRI.png")
@@ -93,7 +94,7 @@ R = 2
 # undersampling K-Space and getting ACS data
 sampled_coils_ks, coil_under_sampled, coil_ACS, coil_ACS_zeros, ACS_row_min, ACS_row_max = Recon_functions.undersampling(coil_view_kspace, R)
 # defining the kernel size for the GRAPPA reconstruction
-kernel_size = [2, 3]
+kernel_size = [4, 5]
 
 plt.figure()
 plt.suptitle('undersampled coils', fontsize=16)
@@ -103,34 +104,41 @@ for i,j in enumerate(coil_under_sampled):
     plt.colorbar()
 
 ## perform GRAPPA reconstruction
-g2 = GRAPPA.GRAPPA(kernel_size, R, coil_ACS, coil_under_sampled)
+g2 = weakGRAPPA.GRAPPA(kernel_size, R, coil_ACS, coil_under_sampled)
 
 # show the final GRAPPA reconstructed image
 plt.figure()
-plt.suptitle('Sum-of-square full GRAPPA reconstruction', fontsize=16)
+plt.suptitle('Sum-of-square full GRAPPA reconstruction (Damaged ACS calibration)', fontsize=16)
 plt.imshow(abs(g2.image))
 
 plt.figure()
-plt.suptitle('coil GRAPPA reconstruction', fontsize=16)
+plt.suptitle('coil GRAPPA reconstruction (Damaged ACS calibration)', fontsize=16)
 for i in range(n_coils):
     plt.subplot(4, 4, i + 1)
     plt.imshow(abs(np.log(g2.kspace[i])))
 
-plt.figure()
-plt.suptitle('ACS GRAPPA reconstruction', fontsize=16)
-ACS_interpolated = []
-for i in range(n_coils):
-    x = np.zeros_like(sampled_coils_ks[0], dtype=complex)
-    x[ACS_row_min:ACS_row_max+1] = g2.ACS_data[i,:,:]
-    ACS_interpolated.append(x)
-ACS_interpolated = np.array(ACS_interpolated)
-ACS_GRAPPA_image = Recon_functions.sum_of_squares(n_coils,ACS_interpolated)
-plt.imshow(abs(ACS_GRAPPA_image))
+## perform strong GRAPPA reconstruction
+g3 = strongGRAPPA.GRAPPA(kernel_size, R, coil_ACS, coil_under_sampled)
 
 plt.figure()
-plt.suptitle('ACS data', fontsize=16)
-ACS_image = Recon_functions.sum_of_squares(n_coils,coil_ACS_zeros)
-plt.imshow(abs(ACS_image))
+plt.suptitle('GRAPPA (using full ACS)', fontsize=16)
+for i in range(n_coils):
+     plt.subplot(4, 4, i + 1)
+     plt.imshow(abs(np.fft.ifft2(np.fft.ifftshift((g3.kspace[i])))))
+
+plt.figure()
+plt.suptitle('Sum-of-square full GRAPPA 2 reconstruction (using full ACS)', fontsize=16)
+plt.imshow(abs(g3.image))
+
+plt.figure()
+plt.suptitle('Sum-of-square full GRAPPA reconstruction and Sum-of-square fully sampled coil view', fontsize=16)
+plt.subplot(2,2,1)
+plt.title('GRAPPA reconstruction')
+plt.imshow(abs(g3.image))
+plt.subplot(2,2,2)
+plt.title('Ground truth')
+plt.imshow(abs(parallel_image))
+
 
 plt.show()
 
