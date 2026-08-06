@@ -7,7 +7,6 @@ from skimage.data import shepp_logan_phantom  # import test image
 import numpy as np
 from scipy import fftpack
 from scipy import signal
-import weakGRAPPA
 import Recon_functions
 import GRAPPA
 import time
