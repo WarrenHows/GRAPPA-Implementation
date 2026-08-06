@@ -1,4 +1,4 @@
-## strongGRAPPA class for GRAPPA reconstruction implementation using entirety of ACS for weight calibration
+## GRAPPA class for GRAPPA reconstruction implementation using entirety of ACS for weight calibration
 
 # import all nessersary modules/libraries
 import imageio.v2 as iio
@@ -8,6 +8,7 @@ import numpy as np
 from scipy import fftpack
 from scipy import signal
 import Recon_functions
+from tqdm import trange
 
 # arguments
 # kernel_size = GRAPPA kernel y direction (even) and x direction (odd) lengths
@@ -46,6 +47,9 @@ class GRAPPA:
         coils,n_padded_rows,n_padded_cols = np.shape(padded_kspace)
         coils,n_padded_ACS_rows,n_padded_ACS_cols = np.shape(padded_ACS_data)
 
+        # create list of GRAPPA weights
+        GRAPPA_weights = []
+
         # calculate each of the R-1 kernels individually
         for kernel_num in total_kernel_num:
             # calculate relative indices for the source positions in kernel
@@ -60,6 +64,7 @@ class GRAPPA:
 
             # calculating the ACS weights
             w = self.weight_calc(coils, num_ACS_trg, S_ACS, pad_ACS_trg_rows, pad_ACS_trg_cols, padded_ACS_data)
+            GRAPPA_weights.append(w) # append weights to list
 
             # finding the actual target indices across all of K-Space
             pad_trg_rows, pad_trg_cols, trg_rows, trg_cols, num_trg = self.trg_indices_calc(kspace, R, kernel_size, n_rows,
@@ -82,6 +87,18 @@ class GRAPPA:
         self.ACS_data = ACS_data
         image = Recon_functions.sum_of_squares(coils, self.kspace)
         self.image = image
+
+        # anchor all needed variables for noise calculation to object
+        self.GRAPPA_weights = np.array(GRAPPA_weights)
+        self.coils = coils
+        self.Ny = n_rows
+        self.Nx = n_cols
+        self.total_kernel_num = total_kernel_num
+        self.pad_size = (pad_size_y, pad_size_x)
+        self.R = R
+        self.kernel_size = kernel_size
+        self.n_ACS_rows = n_ACS_rows
+
 
     def relative_indices(self, R, kernel_size, kernel_num):
 
@@ -206,3 +223,5 @@ class GRAPPA:
         kx_range = slice(0,n_cols)
         kspace[:,ky_range,kx_range] = pad_kspace[:,ky_pad_range,kx_pad_range]
         return kspace
+
+

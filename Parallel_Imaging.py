@@ -9,81 +9,64 @@ from scipy import fftpack
 from scipy import signal
 import weakGRAPPA
 import Recon_functions
-import strongGRAPPA
+import GRAPPA
+import time
+
+
+# GRAPPA pre-processing starts
+pre_start = time.perf_counter()
 
 # import test image, convert to numpy array and find dimensions
 #img = iio.imread("childMRI.png")
-img = shepp_logan_phantom()
+img = iio.imread("T1.png")
+#img = iio.imread("T2.png")
+#img = shepp_logan_phantom()
 img_np = np.array(img)
+img_np = img_np / img_np.max()  # normalise to 0-1 range
+img_np = img_np
 Ny,Nx = np.shape(np.array(img))
+noise = 1
 
 plt.figure()
-plt.imshow(img_np)
+plt.imshow(img_np, cmap='gray')
 
 ## Coil Implementation
 
 # coil parameters
-n_coils = 8
-nx_coils = 2
-#coil_x_pos = [100,200]
-coil_x_pos = [150,250]
-# print(coil_x_pos)
-ny_coils = 4
-#coil_y_pos = np.linspace(50,200,ny_coils)
-coil_y_pos = np.linspace(50,350,ny_coils)
-sigma = 50
+n_coils = 32
+sigma = 30
+# define the desired SNR
+SNR = 30
 
 # creating coils
-coil_sensitivities = Recon_functions.creating_coils(Nx, Ny, coil_y_pos, coil_x_pos, sigma)
+coil_sensitivities, coil_view = Recon_functions.creating_coils(img_np, Nx, Ny, n_coils, sigma)
 
-# plotting sensitivities
-plt.figure()
-plt.suptitle('Coil sensitivities', fontsize=16)
-for i,j in enumerate(coil_sensitivities):
-    plt.subplot(4,4,i+1)
-    plt.imshow(abs(j))
-
-# multiply the image by the sensitivities
-img_np = np.array(img)
-coil_view = []
-plt.figure()
-plt.suptitle('Coil view image domain', fontsize=16)
-for i in enumerate(coil_sensitivities):
-    # each individual coil view
-    x = np.multiply(i[1],img_np)
-    coil_view.append(x)
-    plt.subplot(4,4,i[0]+1)
-    plt.imshow(abs(x))
-coil_view = np.array(coil_view,dtype=complex)
+# displaying the coil sensitivities
+Recon_functions.display_images_(coil_sensitivities, 'Coil sensitivities')
 
 # reconstruct coil views to return result of parallel image
+coil_view_kspace = np.array([np.fft.fftshift(np.fft.fft2(coil_view[i])) for i in range(n_coils)])
 plt.figure()
 plt.suptitle('Sum-of-squares Coil view reconstruction', fontsize=16)
-parallel_image = Recon_functions.sum_of_squares(n_coils,np.fft.fftshift(np.fft.fft2(coil_view)))
-plt.imshow(abs(parallel_image))
+parallel_image = Recon_functions.sum_of_squares(n_coils, coil_view_kspace)
+plt.imshow(abs(parallel_image), cmap='grey')
+plt.axis('off')
 
-## K-Sapce transformations
+# k-space transformations
 
-# fourier transform image and sensitivities to get K-Space raw data
-plt.figure()
-plt.suptitle('Coil view (with noise)', fontsize=16)
-img_kspace = np.fft.fftshift(np.fft.fft2(img_np))
-coil_view_kspace = []
-for index,i in enumerate(coil_view):
-    x = np.fft.fftshift(np.fft.fft2(i))
-    sigma_noise = 0 # 0-15: Low, 15-30: Medium, 30>: High
-    noise = np.random.normal(0, sigma_noise, x.shape)
-    noise_im = np.random.normal(0, sigma_noise, x.shape) * 1j
-    # adding noise to K-Space
-    noise = noise + noise_im
-    x += noise
-    coil_view_kspace.append(x)
-    plt.subplot(4,4,index+1)
-    #plt.imshow(abs(np.log(x)))
-    plt.imshow(abs(np.fft.ifft2(np.fft.ifftshift(x))))
-    plt.colorbar()
-coil_view_kspace = np.array(coil_view_kspace,dtype=complex)
+# apply noise to image and calculate SNR of noisy sum of squares ground truth
+if noise == 1:
+    coil_view_kspace = Recon_functions.applying_noise_SNR(coil_view, SNR)
+    noisy_gt_image = Recon_functions.sum_of_squares(n_coils, coil_view_kspace)
+else:
+    coil_view_kspace = np.fft.fft2(coil_view)
 
+
+
+# display the noisy image
+Recon_functions.display_images_(np.array([np.abs(np.fft.ifft2(np.fft.ifftshift((i)))) for i in coil_view_kspace]), 'Coil view (with noise)')
+
+# confirmation print
 print(len(coil_view_kspace[0]))
 
 ## Parallel imaging: Sampling K-Space coil views with ACS
@@ -96,50 +79,38 @@ sampled_coils_ks, coil_under_sampled, coil_ACS, coil_ACS_zeros, ACS_row_min, ACS
 # defining the kernel size for the GRAPPA reconstruction
 kernel_size = [4, 5]
 
+# display the undersampled coils
+Recon_functions.display_images_(np.array([np.abs(np.fft.ifft2(np.fft.ifftshift((i)))) for i in coil_under_sampled]), 'undersampled coils')
+undersampled_image = Recon_functions.sum_of_squares(n_coils, coil_under_sampled)
 plt.figure()
-plt.suptitle('undersampled coils', fontsize=16)
-for i,j in enumerate(coil_under_sampled):
-    plt.subplot(4,4,i+1)
-    plt.imshow(abs(np.fft.ifft2(np.fft.ifftshift(j))))
-    plt.colorbar()
+plt.imshow(abs(undersampled_image), cmap='gray')
+plt.axis('off')
 
-## perform GRAPPA reconstruction
-g2 = weakGRAPPA.GRAPPA(kernel_size, R, coil_ACS, coil_under_sampled)
+pre_end = time.perf_counter()
+# GRAPPA pre-processing ends
+print(f"Pre-processing time:       {pre_end - pre_start:.4f} seconds")
 
-# show the final GRAPPA reconstructed image
+# perform strong GRAPPA reconstruction
+strong_start = time.perf_counter()
+sg = GRAPPA.GRAPPA(kernel_size, R, coil_ACS, coil_under_sampled)
+grappa_image = sg.image
+grappa_kspace = sg.kspace
+strong_end = time.perf_counter()
+print(f"GRAPPA time:        {strong_end - strong_start:.4f} seconds")
+
+abs_diff = grappa_image - parallel_image
 plt.figure()
-plt.suptitle('Sum-of-square full GRAPPA reconstruction (Damaged ACS calibration)', fontsize=16)
-plt.imshow(abs(g2.image))
-
-plt.figure()
-plt.suptitle('coil GRAPPA reconstruction (Damaged ACS calibration)', fontsize=16)
-for i in range(n_coils):
-    plt.subplot(4, 4, i + 1)
-    plt.imshow(abs(np.log(g2.kspace[i])))
-
-## perform strong GRAPPA reconstruction
-g3 = strongGRAPPA.GRAPPA(kernel_size, R, coil_ACS, coil_under_sampled)
-
-plt.figure()
-plt.suptitle('GRAPPA (using full ACS)', fontsize=16)
-for i in range(n_coils):
-     plt.subplot(4, 4, i + 1)
-     plt.imshow(abs(np.fft.ifft2(np.fft.ifftshift((g3.kspace[i])))))
-
-plt.figure()
-plt.suptitle('Sum-of-square full GRAPPA 2 reconstruction (using full ACS)', fontsize=16)
-plt.imshow(abs(g3.image))
-
-plt.figure()
-plt.suptitle('Sum-of-square full GRAPPA reconstruction and Sum-of-square fully sampled coil view', fontsize=16)
-plt.subplot(2,2,1)
-plt.title('GRAPPA reconstruction')
-plt.imshow(abs(g3.image))
-plt.subplot(2,2,2)
-plt.title('Ground truth')
-plt.imshow(abs(parallel_image))
-
+plt.subplot(1,3,1)
+plt.imshow(np.abs(grappa_image), cmap='gray')
+plt.title(f'GRAPPA reconstruction image (R={R})')
+plt.axis('off')
+plt.subplot(1,3,2)
+plt.imshow(np.abs(parallel_image), cmap='gray')
+plt.axis('off')
+plt.title('Ground truth image')
+plt.subplot(1,3,3)
+plt.imshow(np.abs(abs_diff))
+plt.title(f'Absolute difference (R={R})')
+plt.axis('off')
 
 plt.show()
-
-
